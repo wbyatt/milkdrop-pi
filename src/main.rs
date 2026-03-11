@@ -1,6 +1,7 @@
 mod analysis;
 mod audio;
 mod cli;
+mod icon;
 mod render;
 mod transition;
 mod visualizations;
@@ -127,7 +128,8 @@ impl ApplicationHandler for App {
 
         let attrs = WindowAttributes::default()
             .with_title("milkdrop-pi")
-            .with_inner_size(PhysicalSize::new(800u32, 600));
+            .with_inner_size(PhysicalSize::new(800u32, 600))
+            .with_window_icon(Some(icon::window_icon()));
         let window = Arc::new(
             event_loop
                 .create_window(attrs)
@@ -142,7 +144,7 @@ impl ApplicationHandler for App {
         let compositor = Compositor::new(renderer.device(), renderer.format(), size.width.max(1), size.height.max(1));
 
         let viz_names = self.args.viz_names();
-        let entries = visualizations::create(&viz_names, renderer.device(), renderer.format());
+        let entries = visualizations::create(&viz_names, renderer.device(), renderer.queue(), renderer.format());
         let cycle = VisualizationCycle::new(entries, self.args.duration);
 
         self.state = Some(AppState {

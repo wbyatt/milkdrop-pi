@@ -1,8 +1,10 @@
 pub mod equalizer;
+pub mod gol;
 pub mod polar;
 pub mod terrain;
 
 pub use equalizer::Equalizer;
+pub use gol::GameOfLife;
 pub use polar::Polar;
 pub use terrain::Terrain;
 
@@ -10,21 +12,25 @@ use crate::render::Visualization;
 
 struct Entry {
     name: &'static str,
-    create: fn(&wgpu::Device, wgpu::TextureFormat) -> Box<dyn Visualization>,
+    create: fn(&wgpu::Device, &wgpu::Queue, wgpu::TextureFormat) -> Box<dyn Visualization>,
 }
 
 const REGISTRY: &[Entry] = &[
     Entry {
         name: "equalizer",
-        create: |device, format| Box::new(Equalizer::new(device, format)),
+        create: |device, _queue, format| Box::new(Equalizer::new(device, format)),
+    },
+    Entry {
+        name: "gol",
+        create: |device, _queue, format| Box::new(GameOfLife::new(device, format)),
     },
     Entry {
         name: "polar",
-        create: |device, format| Box::new(Polar::new(device, format)),
+        create: |device, _queue, format| Box::new(Polar::new(device, format)),
     },
     Entry {
         name: "terrain",
-        create: |device, format| Box::new(Terrain::new(device, format)),
+        create: |device, _queue, format| Box::new(Terrain::new(device, format)),
     },
 ];
 
@@ -35,6 +41,7 @@ pub fn available_names() -> Vec<&'static str> {
 pub fn create(
     names: &[String],
     device: &wgpu::Device,
+    queue: &wgpu::Queue,
     format: wgpu::TextureFormat,
 ) -> Vec<Box<dyn Visualization>> {
     let entries: Vec<&Entry> = if names.is_empty() {
@@ -58,5 +65,8 @@ pub fn create(
             .collect()
     };
 
-    entries.iter().map(|e| (e.create)(device, format)).collect()
+    entries
+        .iter()
+        .map(|e| (e.create)(device, queue, format))
+        .collect()
 }
