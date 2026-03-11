@@ -8,7 +8,9 @@ pub struct AudioConfig {
 
 /// Keeps the audio capture stream alive. Drop to stop capture.
 pub struct AudioCapture {
+    host: cpal::Host,
     _stream: cpal::Stream,
+    device_name: String,
 }
 
 /// Lock-free consumer for audio samples from the capture thread.
@@ -27,35 +29,67 @@ impl AudioCapture {
     /// Returns the capture handle, a sample receiver, and the device's audio config.
     pub fn start() -> (Self, AudioReceiver, AudioConfig) {
         let host = cpal::default_host();
-        let device = host
-            .default_output_device()
-            .expect("no output device available");
-        let supported_config = device
-            .default_output_config()
-            .expect("no default output config");
-
-        let sample_rate = supported_config.sample_rate().0;
-        let channels = supported_config.channels();
-
-        log::info!("audio device: {}Hz, {} ch", sample_rate, channels);
-
-        // Ring buffer holds ~1 second of audio
-        let capacity = sample_rate as usize * channels as usize;
-        let rb = HeapRb::<f32>::new(capacity);
-        let (producer, consumer) = rb.split();
-
-        let stream = build_input_stream(&device, &supported_config, producer);
-        stream.play().expect("failed to start audio capture");
+        let (stream, receiver, config, device_name) = open_default_device(&host);
 
         (
-            Self { _stream: stream },
-            AudioReceiver { consumer },
-            AudioConfig {
-                sample_rate,
-                channels,
+            Self {
+                host,
+                _stream: stream,
+                device_name,
             },
+            receiver,
+            config,
         )
     }
+
+    /// Check if the default output device has changed.
+    /// If so, reconnect and return the new receiver and config.
+    /// The caller must rebuild the SpectrumAnalyzer if the sample rate changed.
+    pub fn reconnect_if_changed(&mut self) -> Option<(AudioReceiver, AudioConfig)> {
+        let current = match self.host.default_output_device() {
+            Some(d) => d,
+            None => return None,
+        };
+        let current_name = current.name().unwrap_or_default();
+        if current_name == self.device_name {
+            return None;
+        }
+
+        log::info!("audio device changed: {} -> {}", self.device_name, current_name);
+        let (stream, receiver, config, device_name) = open_default_device(&self.host);
+        self._stream = stream;
+        self.device_name = device_name;
+        Some((receiver, config))
+    }
+}
+
+fn open_default_device(host: &cpal::Host) -> (cpal::Stream, AudioReceiver, AudioConfig, String) {
+    let device = host
+        .default_output_device()
+        .expect("no output device available");
+    let device_name = device.name().unwrap_or_else(|_| "unknown".to_string());
+    let supported_config = device
+        .default_output_config()
+        .expect("no default output config");
+
+    let sample_rate = supported_config.sample_rate().0;
+    let channels = supported_config.channels();
+
+    log::info!("audio device: {} ({}Hz, {} ch)", device_name, sample_rate, channels);
+
+    let capacity = sample_rate as usize * channels as usize;
+    let rb = HeapRb::<f32>::new(capacity);
+    let (producer, consumer) = rb.split();
+
+    let stream = build_input_stream(&device, &supported_config, producer);
+    stream.play().expect("failed to start audio capture");
+
+    (
+        stream,
+        AudioReceiver { consumer },
+        AudioConfig { sample_rate, channels },
+        device_name,
+    )
 }
 
 fn build_input_stream(

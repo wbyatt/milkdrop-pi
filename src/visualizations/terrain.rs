@@ -167,7 +167,7 @@ impl Terrain {
 }
 
 impl Visualization for Terrain {
-    fn update(&self, queue: &wgpu::Queue, frame: &AnalysisFrame) {
+    fn update(&self, _device: &wgpu::Device, queue: &wgpu::Queue, frame: &AnalysisFrame) {
         let mut state = self.state.borrow_mut();
 
         let scroll = frame.elapsed * BASE_SCROLL + frame.rhythm_rotation * RHYTHM_SCROLL;

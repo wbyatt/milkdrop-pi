@@ -3,6 +3,7 @@ use winit::dpi::PhysicalSize;
 use winit::window::Window;
 
 use crate::analysis::AnalysisFrame;
+use crate::overlay::Overlay;
 use crate::transition::Compositor;
 
 /// A swappable visualization that draws into a render pass.
@@ -11,13 +12,17 @@ use crate::transition::Compositor;
 /// owns its own pipeline, buffers, and bind groups, and knows how to draw itself.
 pub trait Visualization {
     /// Upload per-frame analysis data to GPU buffers.
-    fn update(&self, queue: &wgpu::Queue, frame: &AnalysisFrame);
+    fn update(&self, device: &wgpu::Device, queue: &wgpu::Queue, frame: &AnalysisFrame);
 
     /// Issue draw commands into the active render pass.
     fn render<'pass>(&'pass self, pass: &mut wgpu::RenderPass<'pass>);
 
     /// Called when the window resizes. Default: no-op (UV-based shaders don't need this).
     fn resize(&mut self, _width: u32, _height: u32) {}
+
+    /// Called when this visualization becomes the active one (e.g. after a transition).
+    /// Default: no-op.
+    fn on_activate(&mut self) {}
 }
 
 /// GPU infrastructure: device, surface, encoder, present.
@@ -55,8 +60,8 @@ impl Renderer {
         self.surface.configure(&self.device, &self.config);
     }
 
-    pub fn render(&self, viz: &dyn Visualization, frame: &AnalysisFrame) {
-        viz.update(&self.queue, frame);
+    pub fn render(&self, viz: &dyn Visualization, frame: &AnalysisFrame, overlay: &Overlay) {
+        viz.update(&self.device, &self.queue, frame);
 
         let output = match self.surface.get_current_texture() {
             Ok(tex) => tex,
@@ -89,6 +94,7 @@ impl Renderer {
             });
 
             viz.render(&mut pass);
+            overlay.draw(&mut pass);
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
@@ -103,9 +109,10 @@ impl Renderer {
         frame: &AnalysisFrame,
         compositor: &Compositor,
         mix: f32,
+        overlay: &Overlay,
     ) {
-        viz_a.update(&self.queue, frame);
-        viz_b.update(&self.queue, frame);
+        viz_a.update(&self.device, &self.queue, frame);
+        viz_b.update(&self.device, &self.queue, frame);
 
         let output = match self.surface.get_current_texture() {
             Ok(tex) => tex,
@@ -171,6 +178,7 @@ impl Renderer {
                 ..Default::default()
             });
             compositor.composite(&self.queue, &mut pass, mix);
+            overlay.draw(&mut pass);
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));

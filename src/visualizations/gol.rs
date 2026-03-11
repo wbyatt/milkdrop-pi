@@ -572,7 +572,12 @@ impl GameOfLife {
 }
 
 impl Visualization for GameOfLife {
-    fn update(&self, queue: &wgpu::Queue, frame: &AnalysisFrame) {
+    fn on_activate(&mut self) {
+        let mut state = self.state.borrow_mut();
+        *state = GolState::new();
+    }
+
+    fn update(&self, _device: &wgpu::Device, queue: &wgpu::Queue, frame: &AnalysisFrame) {
         let mut state = self.state.borrow_mut();
 
         state.update_camera(frame);

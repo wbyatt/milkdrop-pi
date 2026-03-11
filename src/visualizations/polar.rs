@@ -112,7 +112,7 @@ impl Polar {
 }
 
 impl Visualization for Polar {
-    fn update(&self, queue: &wgpu::Queue, frame: &AnalysisFrame) {
+    fn update(&self, _device: &wgpu::Device, queue: &wgpu::Queue, frame: &AnalysisFrame) {
         queue.write_buffer(
             &self.buffers.spectrum_left,
             0,

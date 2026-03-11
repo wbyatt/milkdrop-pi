@@ -1,9 +1,11 @@
 pub mod equalizer;
+pub mod flame;
 pub mod gol;
 pub mod polar;
 pub mod terrain;
 
 pub use equalizer::Equalizer;
+pub use flame::FractalFlame;
 pub use gol::GameOfLife;
 pub use polar::Polar;
 pub use terrain::Terrain;
@@ -32,41 +34,45 @@ const REGISTRY: &[Entry] = &[
         name: "terrain",
         create: |device, _queue, format| Box::new(Terrain::new(device, format)),
     },
+    Entry {
+        name: "flame",
+        create: |device, queue, format| Box::new(FractalFlame::new(device, queue, format)),
+    },
 ];
 
 pub fn available_names() -> Vec<&'static str> {
     REGISTRY.iter().map(|e| e.name).collect()
 }
 
-pub fn create(
-    names: &[String],
+/// Creates all registered visualizations and returns (vizzes, names, enabled).
+/// If `enabled_names` is non-empty, only those are initially enabled.
+pub fn create_all(
+    enabled_names: &[String],
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     format: wgpu::TextureFormat,
-) -> Vec<Box<dyn Visualization>> {
-    let entries: Vec<&Entry> = if names.is_empty() {
-        REGISTRY.iter().collect()
-    } else {
-        names
-            .iter()
-            .map(|name| {
-                REGISTRY
-                    .iter()
-                    .find(|e| e.name == name)
-                    .unwrap_or_else(|| {
-                        let available: Vec<_> = available_names();
-                        panic!(
-                            "unknown visualization '{}'. available: {}",
-                            name,
-                            available.join(", ")
-                        );
-                    })
-            })
-            .collect()
-    };
+) -> (Vec<Box<dyn Visualization>>, Vec<&'static str>, Vec<bool>) {
+    // Validate requested names
+    for name in enabled_names {
+        if !REGISTRY.iter().any(|e| e.name == name) {
+            let available: Vec<_> = available_names();
+            panic!(
+                "unknown visualization '{}'. available: {}",
+                name,
+                available.join(", ")
+            );
+        }
+    }
 
-    entries
+    let names: Vec<&'static str> = REGISTRY.iter().map(|e| e.name).collect();
+    let enabled: Vec<bool> = REGISTRY
+        .iter()
+        .map(|e| enabled_names.is_empty() || enabled_names.iter().any(|n| n == e.name))
+        .collect();
+    let vizzes: Vec<Box<dyn Visualization>> = REGISTRY
         .iter()
         .map(|e| (e.create)(device, queue, format))
-        .collect()
+        .collect();
+
+    (vizzes, names, enabled)
 }

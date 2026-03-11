@@ -98,7 +98,7 @@ impl Equalizer {
 }
 
 impl Visualization for Equalizer {
-    fn update(&self, queue: &wgpu::Queue, frame: &AnalysisFrame) {
+    fn update(&self, _device: &wgpu::Device, queue: &wgpu::Queue, frame: &AnalysisFrame) {
         queue.write_buffer(&self.buffers.spectrum, 0, bytemuck::cast_slice(&frame.bands));
         queue.write_buffer(&self.buffers.waveform, 0, bytemuck::cast_slice(&frame.waveform));
         queue.write_buffer(&self.buffers.rhythm, 0, bytemuck::cast_slice(&frame.rhythm));
